@@ -18,12 +18,20 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <unistd.h>
 
 /*prototypes*/
 
 /*variables*/
+char input[] = "";
 char output[] = "out.bmp";
 float threshold;
+long fd_size;
+char *fd_data;
 
 /*constants*/
 #define USAGE_STR "\
@@ -35,24 +43,28 @@ float threshold;
 
 #define OPTIONS_STR "\
   -o [FILE]         Sets the output file (defaults to \"out.bmp\").\n\
-  -t [0.0-1.0]      Applies this value to threshold filter.\n\
+  -t [0.0-1.0]      Applies this (rounded) value to threshold filter.\n\
   -h                Displays this usage message."
 
-/*functions*/
+#define BMP_ERROR "Please pass a BMP file to load.\nSee \'bmpedit -h\' for more information."
 
-//usage
+#define BUFFER 512
+
+/*functions*/
 void usage(void){
   printf("\nUsage: bmpedit [OPTIONS...] [input.bmp]\n\n");
   printf("DESCRIPTION:\n%s\n\n\n", USAGE_STR);
   printf("OPTIONS:\n%s\n\n", OPTIONS_STR);
 }
 
-//error
+void error(char msg[]) {
+   fprintf(stderr,"Error: %s\n",msg);
+   exit(1);
+}
 
-//parse_args
 int parse_args(int argc, char *argv[]){
   if (argc < 2){
-    printf("%s: missing file operand\nTry '%s -h' for more information.\n",argv[0],argv[0]);
+    error(BMP_ERROR);
     return 1;
   }
   int i;
@@ -67,7 +79,7 @@ int parse_args(int argc, char *argv[]){
       i++;
     }else if (strcmp(argv[i],"-t") == 0){
       if (atof(argv[i+1]) < 0 || atof(argv[i+1]) > 1.0 ){
-        printf("Threshold must be between 0.0 and 1.0\n");
+        error("Threshold must be between 0.0 and 1.0");
         exit(1);
       }
       printf("threshold is: %.1f\n", threshold);
@@ -75,20 +87,66 @@ int parse_args(int argc, char *argv[]){
       printf("threshold is now: %.1f\n", threshold);
       i++;
     }else{
-      usage();
-      return 1;
+      printf("input is: %s\n", input);
+      strcpy(input, argv[argc-1]);
+      printf("input is: %s\n", input);
     }
   }
   return 0;
 }
 
+int open_file(char input[], char **fd_data){
+  //get size of file for mmap
+  struct stat fd_stat;
+  if (stat(input, &fd_stat) == -1){
+    return 1;
+  }else{
+    fd_size = fd_stat.st_size;
+  }
+
+  printf("size of file is: %lu\n",fd_stat.st_size);
+  
+  //open the file
+  int fd = open(input, O_RDONLY);
+  if (fd == -1){
+    close(fd);
+    return 1;
+  }
+  
+  //memory map the file
+  fd_data = mmap(NULL, fd_stat.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+  if (fd_data == MAP_FAILED){
+    close(fd);
+    return 1;
+  }
+  
+  close(fd);
+  return 0;
+}
+
 int main(int argc, char *argv[]){
+  //parse all arguments
   if (parse_args(argc, argv)){
     exit(0);
   }
   
-  printf("\n\nwe're doing stuff\n\n");
-  
+  //ensure we have an input file
+  if (strcmp(input,"") == 0){
+    error(BMP_ERROR);
+  }
+
+  //try to mmap the file, pass address of fd_data so we can edit inside function
+  if (open_file(input, &fd_data)){
+    error("Problem loading file.");
+  }
+
+  //read and print out size of mmap'd file
+
+  //do more stuff
+  printf("\n\nWe're doing stuff..\n\n");
+
+  //no need to unmap memory as the process is about to terminate anyway
+  int fd_munmap = munmap(fd_data,fd_size);
   return 0;
 }
 
