@@ -28,8 +28,9 @@
 
 /*variables*/
 char input[] = "";
-char output[] = "out.bmp";
+char output[] = "out.bmp"; //default to this name for output bmp
 float threshold;
+int fd;
 long fd_size;
 char *fd_data;
 
@@ -48,20 +49,23 @@ char *fd_data;
 
 #define BMP_ERROR "Please pass a BMP file to load.\nSee \'bmpedit -h\' for more information."
 
-#define BUFFER 512
+#define BUFFER 512 //probably not needed, remove later if not
 
 /*functions*/
+//print usage
 void usage(void){
   printf("\nUsage: bmpedit [OPTIONS...] [input.bmp]\n\n");
   printf("DESCRIPTION:\n%s\n\n\n", USAGE_STR);
   printf("OPTIONS:\n%s\n\n", OPTIONS_STR);
 }
 
+//print errors
 void error(char msg[]) {
    fprintf(stderr,"Error: %s\n",msg);
    exit(1);
 }
 
+//parse arguments
 int parse_args(int argc, char *argv[]){
   if (argc < 2){
     error(BMP_ERROR);
@@ -95,7 +99,8 @@ int parse_args(int argc, char *argv[]){
   return 0;
 }
 
-int open_file(char input[], char **fd_data){
+//open and mmap the input bmp
+int open_file(char input[], char **data){
   //get size of file for mmap
   struct stat fd_stat;
   if (stat(input, &fd_stat) == -1){
@@ -104,27 +109,31 @@ int open_file(char input[], char **fd_data){
     fd_size = fd_stat.st_size;
   }
 
-  printf("size of file is: %lu\n",fd_stat.st_size);
+  printf("size of file is: %lu\n",fd_size);
   
   //open the file
-  int fd = open(input, O_RDONLY);
+  fd = open(input, O_RDONLY);
   if (fd == -1){
     close(fd);
     return 1;
   }
   
   //memory map the file
-  fd_data = mmap(NULL, fd_stat.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
-  if (fd_data == MAP_FAILED){
+  *data = mmap(NULL, fd_size, PROT_READ, MAP_PRIVATE, fd, 0);
+  if (data == MAP_FAILED){
     close(fd);
     return 1;
   }
-  
+
+  printf("\n\n\nPRINTING DATA: %c%c\n\n\n",*data[0],*data[1]);
+
   close(fd);
   return 0;
 }
 
+//main function
 int main(int argc, char *argv[]){
+  printf("address of fd_data: %p",fd_data);
   //parse all arguments
   if (parse_args(argc, argv)){
     exit(0);
@@ -136,17 +145,62 @@ int main(int argc, char *argv[]){
   }
 
   //try to mmap the file, pass address of fd_data so we can edit inside function
-  if (open_file(input, &fd_data)){
+/*  if (open_file(input, &fd_data)){
     error("Problem loading file.");
   }
-
+*/
   //read and print out size of mmap'd file
+//  printf("%c%c\n",fd_data[0],fd_data[1]);
+
+
+
+
+//moved to main, works
+ //get size of file for mmap
+  struct stat fd_stat;
+  if (stat(input, &fd_stat) == -1){
+//    return 1;
+      exit(1);
+  }else{
+    fd_size = fd_stat.st_size;
+  }
+
+  printf("size of file is: %lu\n",fd_stat.st_size);
+  
+  //open the file
+  fd = open(input, O_RDONLY);
+  if (fd == -1){
+    close(fd);
+//    return 1;
+    exit(1);
+  }
+  
+  //memory map the file
+  fd_data = mmap(NULL, fd_size, PROT_READ, MAP_PRIVATE, fd, 0);
+  if (fd_data == MAP_FAILED){
+    close(fd);
+//    return 1;
+      exit(1);
+  }
+
+  printf("\n\n\nPRINTING DATA:\n");
+  int i;
+  for (i=0;i<100;i++){
+    printf("%c",fd_data[i]);
+  }
+  printf("\n\n");
+  close(fd);
+  
+  printf("address of fd_data: %p",fd_data);
 
   //do more stuff
   printf("\n\nWe're doing stuff..\n\n");
 
   //no need to unmap memory as the process is about to terminate anyway
   int fd_munmap = munmap(fd_data,fd_size);
+  if (fd_munmap == -1){
+    error("Could not unmap file in memory.");
+  }
   return 0;
 }
 
