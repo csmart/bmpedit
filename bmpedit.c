@@ -47,7 +47,8 @@ char *fd_data;
   -t [0.0-1.0]      Applies this (rounded) value to threshold filter.\n\
   -h                Displays this usage message."
 
-#define BMP_ERROR "Please pass a BMP file to load.\nSee \'bmpedit -h\' for more information."
+#define BMP_ERROR "\
+Please pass a BMP file to load.\nSee \'bmpedit -h\' for more information."
 
 #define BUFFER 512 //probably not needed, remove later if not
 
@@ -100,7 +101,10 @@ int parse_args(int argc, char *argv[]){
 }
 
 //open and mmap the input bmp
-int open_file(char input[], char **data){
+int open_file(char input[]){
+
+  printf("address of fd_data from inside open_file: %p\n",fd_data);
+
   //get size of file for mmap
   struct stat fd_stat;
   if (stat(input, &fd_stat) == -1){
@@ -119,13 +123,20 @@ int open_file(char input[], char **data){
   }
   
   //memory map the file
-  *data = mmap(NULL, fd_size, PROT_READ, MAP_PRIVATE, fd, 0);
-  if (data == MAP_FAILED){
+  fd_data = mmap(NULL, fd_size, PROT_READ, MAP_PRIVATE, fd, 0);
+  if (fd_data == MAP_FAILED){
     close(fd);
     return 1;
   }
 
-  printf("\n\n\nPRINTING DATA: %c%c\n\n\n",*data[0],*data[1]);
+  printf("address of fd_data from inside open_file post processing: %p\n",fd_data);
+  
+  printf("\n\n\nPRINTING DATA from inside open_file:\n");
+  int i;
+  for (i=0;i<1000;i++){
+    printf("%d",fd_data[i]);
+  }
+  printf("\n\n\n\n\n");
 
   close(fd);
   return 0;
@@ -133,7 +144,8 @@ int open_file(char input[], char **data){
 
 //main function
 int main(int argc, char *argv[]){
-  printf("address of fd_data: %p",fd_data);
+  printf("address of fd_data in main(): %p\n",fd_data);
+
   //parse all arguments
   if (parse_args(argc, argv)){
     exit(0);
@@ -145,15 +157,15 @@ int main(int argc, char *argv[]){
   }
 
   //try to mmap the file, pass address of fd_data so we can edit inside function
-/*  if (open_file(input, &fd_data)){
+  if (open_file(input)){
     error("Problem loading file.");
   }
-*/
+
   //read and print out size of mmap'd file
 //  printf("%c%c\n",fd_data[0],fd_data[1]);
 
 
-
+/*
 
 //moved to main, works
  //get size of file for mmap
@@ -182,16 +194,17 @@ int main(int argc, char *argv[]){
 //    return 1;
       exit(1);
   }
+*/
 
-  printf("\n\n\nPRINTING DATA:\n");
+  printf("\n\n\nPRINTING DATA from inside main:\n");
   int i;
-  for (i=0;i<100;i++){
+  for (i=0;i<1000;i++){
     printf("%c",fd_data[i]);
   }
-  printf("\n\n");
+  printf("\n\n\n\n\n");
   close(fd);
   
-  printf("address of fd_data: %p",fd_data);
+  printf("address of fd_data post processing: %p\n",fd_data);
 
   //do more stuff
   printf("\n\nWe're doing stuff..\n\n");
