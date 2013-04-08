@@ -30,7 +30,6 @@
 char input[] = "";
 char output[] = "out.bmp"; //default to this name for output bmp
 float threshold;
-int fd;
 long fd_size;
 char *fd_data;
 
@@ -102,7 +101,7 @@ int parse_args(int argc, char *argv[]){
 
 //open and mmap the input bmp
 int open_file(char input[]){
-
+  //testing - print address of fd_data
   printf("address of fd_data from inside open_file: %p\n",fd_data);
 
   //get size of file for mmap
@@ -116,6 +115,7 @@ int open_file(char input[]){
   printf("size of file is: %lu\n",fd_size);
   
   //open the file
+  int fd;
   fd = open(input, O_RDONLY);
   if (fd == -1){
     close(fd);
@@ -129,8 +129,10 @@ int open_file(char input[]){
     return 1;
   }
 
+  //testing - print address of fd_data
   printf("address of fd_data from inside open_file post processing: %p\n",fd_data);
-  
+
+  //testing - printing data from mmap'd file  
   printf("\n\n\nPRINTING DATA from inside open_file:\n");
   int i;
   for (i=0;i<1000;i++){
@@ -144,6 +146,7 @@ int open_file(char input[]){
 
 //main function
 int main(int argc, char *argv[]){
+  //testing - print address of fd_data
   printf("address of fd_data in main(): %p\n",fd_data);
 
   //parse all arguments
@@ -156,57 +159,23 @@ int main(int argc, char *argv[]){
     error(BMP_ERROR);
   }
 
-  //try to mmap the file, pass address of fd_data so we can edit inside function
+  //try to mmap the file
   if (open_file(input)){
     error("Problem loading file.");
   }
 
-  //read and print out size of mmap'd file
-//  printf("%c%c\n",fd_data[0],fd_data[1]);
-
-
-/*
-
-//moved to main, works
- //get size of file for mmap
-  struct stat fd_stat;
-  if (stat(input, &fd_stat) == -1){
-//    return 1;
-      exit(1);
-  }else{
-    fd_size = fd_stat.st_size;
-  }
-
-  printf("size of file is: %lu\n",fd_stat.st_size);
-  
-  //open the file
-  fd = open(input, O_RDONLY);
-  if (fd == -1){
-    close(fd);
-//    return 1;
-    exit(1);
-  }
-  
-  //memory map the file
-  fd_data = mmap(NULL, fd_size, PROT_READ, MAP_PRIVATE, fd, 0);
-  if (fd_data == MAP_FAILED){
-    close(fd);
-//    return 1;
-      exit(1);
-  }
-*/
-
+  //testing - printing data from mmap'd file
   printf("\n\n\nPRINTING DATA from inside main:\n");
   int i;
   for (i=0;i<1000;i++){
     printf("%c",fd_data[i]);
   }
   printf("\n\n\n\n\n");
-  close(fd);
-  
+
+  //testing  
   printf("address of fd_data post processing: %p\n",fd_data);
 
-  //do more stuff
+  //testing - do more stuff
   printf("\n\nWe're doing stuff..\n\n");
 
   //no need to unmap memory as the process is about to terminate anyway
@@ -216,8 +185,5 @@ int main(int argc, char *argv[]){
   }
   return 0;
 }
-
-
-
 
 
