@@ -122,6 +122,15 @@ int open_file(char input[]){
     return 1;
   }
   
+  //read first two bytes, if not supported file, exit
+  char magic_number[2];
+  read(fd, magic_number, 2);
+  
+  if (strcmp(magic_number, "BM") != 0){
+    close(fd);
+    error("Not a supported file type.");
+  }
+  
   //memory map the file
   fd_data = mmap(NULL, fd_size, PROT_READ, MAP_PRIVATE, fd, 0);
   if (fd_data == MAP_FAILED){
