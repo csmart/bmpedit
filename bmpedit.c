@@ -30,8 +30,8 @@
 char input[] = "";
 char output[] = "out.bmp"; //default to this name for output bmp
 float threshold;
-long fd_size;
-char *fd_data;
+unsigned long fd_size;
+unsigned char *fd_data;
 
 /*constants*/
 #define USAGE_STR "\
@@ -117,6 +117,7 @@ int open_file(char input[]){
   //open the file
   int fd;
   fd = open(input, O_RDONLY);
+  printf("\n\nresult of opening file was: %d\n\n", fd);
   if (fd == -1){
     close(fd);
     return 1;
@@ -131,6 +132,8 @@ int open_file(char input[]){
     error("Not a supported file type.");
   }
   
+  //should I check for DIB header?
+  
   //memory map the file
   fd_data = mmap(NULL, fd_size, PROT_READ, MAP_PRIVATE, fd, 0);
   if (fd_data == MAP_FAILED){
@@ -144,12 +147,41 @@ int open_file(char input[]){
   //testing - printing data from mmap'd file  
   printf("\n\n\nPRINTING DATA from inside open_file:\n");
   int i;
-  for (i=0;i<1000;i++){
+  for (i=0;i<100;i++){
     printf("%d",fd_data[i]);
   }
   printf("\n\n\n\n\n");
 
   close(fd);
+  return 0;
+}
+
+//print file details
+int get_details(){
+  //if file is bmp, each int is 4 bytes, width offset 12h, height offset 16h
+  //we need to reverse the bits as it's little endian
+
+  int width, height, bits, file_size, offset, data_size;
+  width = fd_data[0x12] | fd_data[0x13] << 8 | fd_data[0x14] << 16 | fd_data[0x15] << 24;
+  printf("Image width: %dpx\n",width);
+
+  height = fd_data[0x16] | fd_data[0x17] << 8 | fd_data[0x18] << 16 | fd_data[0x19] << 24;
+  printf("Image height: %dpx\n",height);
+  
+  bits =  fd_data[0x1C] | fd_data[0x1D] << 8;
+  printf("Image bpp: %d\n",bits);
+
+  file_size =  fd_data[0x02] | fd_data[0x03] << 8 | fd_data[0x04] << 16 | fd_data[0x05] << 24;
+  printf("bmpheader.filesize: %d\n",file_size);
+
+  offset =  fd_data[0x0A] | fd_data[0x0B] << 8 | fd_data[0x0C] << 16 | fd_data[0x0D] << 24;
+  printf("bmpheader.offset: %d\n",offset);
+
+  data_size =  fd_data[0x22] | fd_data[0x23] << 8 | fd_data[0x24] << 16 | fd_data[0x25] << 24;
+  printf("dibheader.datasize: %d\n",data_size);
+
+  printf("read until: %lu\n",fd_size);
+
   return 0;
 }
 
@@ -176,13 +208,19 @@ int main(int argc, char *argv[]){
   //testing - printing data from mmap'd file
   printf("\n\n\nPRINTING DATA from inside main:\n");
   int i;
-  for (i=0;i<1000;i++){
+  for (i=0;i<100;i++){
     printf("%c",fd_data[i]);
   }
   printf("\n\n\n\n\n");
 
   //testing  
   printf("address of fd_data post processing: %p\n",fd_data);
+
+  if (get_details()){
+    error("Problem looking up the details of the file.");
+  }
+  
+  
 
   //testing - do more stuff
   printf("\n\nWe're doing stuff..\n\n");
