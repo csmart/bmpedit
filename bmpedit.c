@@ -27,13 +27,13 @@
 /*prototypes*/
 
 /*variables*/
-char input[] = "";
+char input[] = ""; //storing the input from args[]
 char output[] = "out.bmp"; //default to this name for output bmp
-float threshold;
-unsigned long fd_size;
+float threshold; //storing the threshold for filter
+unsigned long fd_size; //storing size of file
 unsigned char *fd_data; //for reading
 unsigned char *fd_data_w; //for writing
-
+int fd_w; //output file descriptor
 
 /*constants*/
 #define USAGE_STR "\
@@ -187,9 +187,9 @@ int get_details(){
   return 0;
 }
 
+//create output file, mmap, memcpy from input, modifications will be written at close
 int write_file(char output[]){
   //open the file
-  int fd_w;
   fd_w = open(output, O_RDWR|O_CREAT|O_TRUNC, 00660);
   printf("\n\nresult of opening file was: %d\n\n", fd_w);
   if (fd_w == -1){
@@ -211,7 +211,7 @@ int write_file(char output[]){
     close(fd_w);
     return 1;
   }
-
+  
   //copy input to output
   memcpy(fd_data_w, fd_data, fd_size);
 
@@ -272,6 +272,16 @@ int main(int argc, char *argv[]){
   if (fd_munmap == -1){
     error("Could not unmap file in memory.");
   }
+
+  //probably should unmap the output file as we want to close the fd
+  int fd_w_munmap = munmap(fd_data_w,fd_size);
+  if (fd_w_munmap == -1){
+    error("Could not unmap output file in memory.");
+  }
+
+  //I'm not sure when I need to close this fd, can I modify fd_data_w after I've closed it?
+  close(fd_w);
+  
   return 0;
 }
 
