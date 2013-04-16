@@ -51,8 +51,6 @@ int fd_w; //output file descriptor
 #define BMP_ERROR "\
 Please pass a BMP file to load.\nSee \'bmpedit -h\' for more information."
 
-#define BUFFER 512 //probably not needed, remove later if not
-
 /*functions*/
 //print usage
 void usage(void){
@@ -79,33 +77,29 @@ int parse_args(int argc, char *argv[]){
       usage();
       return 1;
     }else if (strcmp(argv[i],"-o") == 0){
-      printf("output is: %s\n", output);
       strcpy(output, argv[i+1]);
-      printf("output is now: %s\n", output);
+      //testing
+      printf("TESTING: output is: %s\n", output);
       i++;
     }else if (strcmp(argv[i],"-t") == 0){
       if (atof(argv[i+1]) < 0 || atof(argv[i+1]) > 1.0 ){
         error("Threshold must be between 0.0 and 1.0");
         exit(1);
       }
-      printf("threshold is: %.1f\n", threshold);
       threshold = atof(argv[i+1]);
-      printf("threshold is now: %.1f\n", threshold);
       i++;
     }else{
-      printf("input is: %s\n", input);
       strcpy(input, argv[argc-1]);
-      printf("input is: %s\n", input);
+      //testing
+      printf("TESTING: input is: %s\n", input);
     }
   }
+
   return 0;
 }
 
 //open and mmap the input bmp
 int open_file(char input[]){
-  //testing - print address of fd_data
-  printf("address of fd_data from inside open_file: %p\n",fd_data);
-
   //get size of file for mmap
   struct stat fd_stat;
   if (stat(input, &fd_stat) == -1){
@@ -114,12 +108,12 @@ int open_file(char input[]){
     fd_size = fd_stat.st_size;
   }
 
-  printf("size of file is: %lu\n",fd_size);
+  //testing
+  printf("TESTING: size of file is: %lu\n",fd_size);
   
   //open the file
   int fd;
   fd = open(input, O_RDONLY);
-  printf("\n\nresult of opening file was: %d\n\n", fd);
   if (fd == -1){
     close(fd);
     return 1;
@@ -142,17 +136,6 @@ int open_file(char input[]){
     close(fd);
     return 1;
   }
-
-  //testing - print address of fd_data
-  printf("address of fd_data from inside open_file post processing: %p\n",fd_data);
-
-  //testing - printing data from mmap'd file  
-  printf("\n\n\nPRINTING DATA from inside open_file:\n");
-  int i;
-  for (i=0;i<100;i++){
-    printf("%d",fd_data[i]);
-  }
-  printf("\n\n\n\n\n");
 
   close(fd);
   return 0;
@@ -191,7 +174,6 @@ int get_details(){
 int write_file(char output[]){
   //open the file
   fd_w = open(output, O_RDWR|O_CREAT|O_TRUNC, 00660);
-  printf("\n\nresult of opening file was: %d\n\n", fd_w);
   if (fd_w == -1){
     close(fd_w);
     return 1;
@@ -199,7 +181,6 @@ int write_file(char output[]){
 
   //truncate the new file with the size of input
   int fd_w_trunc = truncate(output,fd_size);
-  printf("truncate is %d\n",fd_w_trunc);
   if (fd_w_trunc != 0){
     close(fd_w);
     return 1;
@@ -218,11 +199,18 @@ int write_file(char output[]){
   return 0;
 }
 
+//run the filter process on the file
+int filter(){
+
+  //reminder:
+  //might need a struct to hold info for the file, cause I need to access things like res for filter..
+
+  printf("TESTING: you're in the filter function: %f\n\n",threshold);
+  return 0;
+}
+
 //main function
 int main(int argc, char *argv[]){
-  //testing - print address of fd_data
-  printf("address of fd_data in main(): %p\n",fd_data);
-
   //parse all arguments
   if (parse_args(argc, argv)){
     exit(0);
@@ -238,17 +226,7 @@ int main(int argc, char *argv[]){
     error("Problem loading file.");
   }
 
-  //testing - printing data from mmap'd file
-  printf("\n\n\nPRINTING DATA from inside main:\n");
-  int i;
-  for (i=0;i<100;i++){
-    printf("%c",fd_data[i]);
-  }
-  printf("\n\n\n\n\n");
-
-  //testing  
-  printf("address of fd_data post processing: %p\n",fd_data);
-
+  //print the details of the file
   if (get_details()){
     error("Problem looking up the details of the file.");
   }
@@ -259,10 +237,9 @@ int main(int argc, char *argv[]){
   }
 
   //run filter
-  
+  filter();
 
   //run other
-
 
   //testing - do more stuff
   printf("\n\nWe're doing stuff..\n\n");
