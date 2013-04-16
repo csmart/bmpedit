@@ -31,7 +31,9 @@ char input[] = "";
 char output[] = "out.bmp"; //default to this name for output bmp
 float threshold;
 unsigned long fd_size;
-unsigned char *fd_data;
+unsigned char *fd_data; //for reading
+unsigned char *fd_data_w; //for writing
+
 
 /*constants*/
 #define USAGE_STR "\
@@ -126,7 +128,7 @@ int open_file(char input[]){
   //read first two bytes, if not supported file, exit
   char magic_number[2];
   read(fd, magic_number, 2);
-  
+    
   if (strcmp(magic_number, "BM") != 0){
     close(fd);
     error("Not a supported file type.");
@@ -185,6 +187,37 @@ int get_details(){
   return 0;
 }
 
+int write_file(char output[]){
+  //open the file
+  int fd_w;
+  fd_w = open(output, O_RDWR|O_CREAT|O_TRUNC, 00660);
+  printf("\n\nresult of opening file was: %d\n\n", fd_w);
+  if (fd_w == -1){
+    close(fd_w);
+    return 1;
+  }
+
+  //truncate the new file with the size of input
+  int fd_w_trunc = truncate(output,fd_size);
+  printf("truncate is %d\n",fd_w_trunc);
+  if (fd_w_trunc != 0){
+    close(fd_w);
+    return 1;
+  }
+
+  //mmap
+  fd_data_w = mmap(NULL, fd_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd_w, 0);
+  if (fd_data_w == MAP_FAILED){
+    close(fd_w);
+    return 1;
+  }
+
+  //copy input to output
+  memcpy(fd_data_w, fd_data, fd_size);
+
+  return 0;
+}
+
 //main function
 int main(int argc, char *argv[]){
   //testing - print address of fd_data
@@ -219,8 +252,17 @@ int main(int argc, char *argv[]){
   if (get_details()){
     error("Problem looking up the details of the file.");
   }
+
+  //try to mmap the output file
+  if (write_file(output)){
+    error("Problem writing to output file.");
+  }
+
+  //run filter
   
-  
+
+  //run other
+
 
   //testing - do more stuff
   printf("\n\nWe're doing stuff..\n\n");
