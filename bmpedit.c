@@ -27,8 +27,8 @@
 /*prototypes*/
 
 /*variables*/
-char input[] = ""; //storing the input from args[]
-char output[] = "out.bmp"; //default to this name for output bmp
+char input[100]; //storing the input from args[]
+char output[100] = "out.bmp"; //default to this name for output bmp
 float threshold; //storing the threshold for filter
 unsigned long fd_size; //storing size of file
 unsigned char *fd_data; //for reading
