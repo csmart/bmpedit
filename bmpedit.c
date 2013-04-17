@@ -23,16 +23,12 @@
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#include "bmpedit.h"
 
 /*prototypes*/
 
 /*variables*/
-char input[256]; //storing the input from args[]
-char output[256] = "out.bmp"; //default to this name for output bmp
 float threshold; //storing the threshold for filter
-unsigned long fd_size; //storing size of file
-unsigned char *fd_data; //for reading
-unsigned char *fd_data_w; //for writing
 int fd_w; //output file descriptor
 
 /*constants*/
@@ -66,7 +62,8 @@ void error(char msg[]) {
 }
 
 //parse arguments
-int parse_args(int argc, char *argv[]){
+int parse_args(image *img, int argc, char *argv[]){
+  printf("argc: %d\n\n",argc);
   if (argc < 2){
     error(BMP_ERROR);
     return 1;
@@ -77,9 +74,9 @@ int parse_args(int argc, char *argv[]){
       usage();
       return 1;
     }else if (strcmp(argv[i],"-o") == 0){
-      strncpy(output, argv[i+1], 256);
+      strncpy(img->output, argv[i+1], 256);
       //testing
-      printf("TESTING: output is: %s\n", output);
+      printf("TESTING: output is: %s\n", img->output);
       i++;
     }else if (strcmp(argv[i],"-t") == 0){
       if (atof(argv[i+1]) < 0 || atof(argv[i+1]) > 1.0 ){
@@ -89,9 +86,9 @@ int parse_args(int argc, char *argv[]){
       threshold = atof(argv[i+1]);
       i++;
     }else{
-      strncpy(input, argv[argc-1], 256);
+      strncpy(img->input, argv[argc-1], 256);
       //testing
-      printf("TESTING: input is: %s\n", input);
+      printf("TESTING: input is: %s\n", img->input);
     }
   }
 
@@ -99,40 +96,36 @@ int parse_args(int argc, char *argv[]){
 }
 
 //open and mmap the input bmp
-int open_file(char input[]){
+int open_file(image *img){
   //get size of file for mmap
   struct stat fd_stat;
-  if (stat(input, &fd_stat) == -1){
+  if (stat(img->input, &fd_stat) == -1){
     return 1;
   }else{
-    fd_size = fd_stat.st_size;
+    img->fd_size = fd_stat.st_size;
   }
 
-  //testing
-  printf("TESTING: size of file is: %lu\n",fd_size);
-  
   //open the file
   int fd;
-  fd = open(input, O_RDONLY);
+  fd = open(img->input, O_RDONLY);
   if (fd == -1){
     close(fd);
     return 1;
   }
   
   //read first two bytes, if not supported file, exit
-  char magic_number[2];
-  read(fd, magic_number, 2);
-    
-  if (strcmp(magic_number, "BM") != 0){
+  read(fd, img->magic_number, 2);
+  
+  if (strcmp(img->magic_number, "BM") != 0){
     close(fd);
     error("Not a supported file type.");
   }
-  
+
   //should I check for DIB header?
   
   //memory map the file
-  fd_data = mmap(NULL, fd_size, PROT_READ, MAP_PRIVATE, fd, 0);
-  if (fd_data == MAP_FAILED){
+  img->fd_data = mmap(NULL, img->fd_size, PROT_READ, MAP_PRIVATE, fd, 0);
+  if (img->fd_data == MAP_FAILED){
     close(fd);
     return 1;
   }
@@ -142,59 +135,59 @@ int open_file(char input[]){
 }
 
 //print file details
-int get_details(){
+int get_details(image *img){
   //if file is bmp, each int is 4 bytes, width offset 12h, height offset 16h
   //we need to reverse the bits as it's little endian
 
-  int width, height, bits, file_size, offset, data_size;
-  width = fd_data[0x12] | fd_data[0x13] << 8 | fd_data[0x14] << 16 | fd_data[0x15] << 24;
-  printf("Image width: %dpx\n",width);
+//  int width, height, bits, file_size, offset, data_size;
+  img->width = img->fd_data[0x12] | img->fd_data[0x13] << 8 | img->fd_data[0x14] << 16 | img->fd_data[0x15] << 24;
+  printf("Image width: %dpx\n",img->width);
 
-  height = fd_data[0x16] | fd_data[0x17] << 8 | fd_data[0x18] << 16 | fd_data[0x19] << 24;
-  printf("Image height: %dpx\n",height);
+  img->height = img->fd_data[0x16] | img->fd_data[0x17] << 8 | img->fd_data[0x18] << 16 | img->fd_data[0x19] << 24;
+  printf("Image height: %dpx\n",img->height);
   
-  bits =  fd_data[0x1C] | fd_data[0x1D] << 8;
-  printf("Image bpp: %d\n",bits);
+  img->bits =  img->fd_data[0x1C] | img->fd_data[0x1D] << 8;
+  printf("Image bpp: %d\n",img->bits);
 
-  file_size =  fd_data[0x02] | fd_data[0x03] << 8 | fd_data[0x04] << 16 | fd_data[0x05] << 24;
-  printf("bmpheader.filesize: %d\n",file_size);
+  img->file_size =  img->fd_data[0x02] | img->fd_data[0x03] << 8 | img->fd_data[0x04] << 16 | img->fd_data[0x05] << 24;
+  printf("bmpheader.filesize: %d\n",img->file_size);
 
-  offset =  fd_data[0x0A] | fd_data[0x0B] << 8 | fd_data[0x0C] << 16 | fd_data[0x0D] << 24;
-  printf("bmpheader.offset: %d\n",offset);
+  img->offset =  img->fd_data[0x0A] | img->fd_data[0x0B] << 8 | img->fd_data[0x0C] << 16 | img->fd_data[0x0D] << 24;
+  printf("bmpheader.offset: %d\n",img->offset);
 
-  data_size =  fd_data[0x22] | fd_data[0x23] << 8 | fd_data[0x24] << 16 | fd_data[0x25] << 24;
-  printf("dibheader.datasize: %d\n",data_size);
+  img->data_size =  img->fd_data[0x22] | img->fd_data[0x23] << 8 | img->fd_data[0x24] << 16 | img->fd_data[0x25] << 24;
+  printf("dibheader.datasize: %d\n",img->data_size);
 
-  printf("read until: %lu\n",fd_size);
+  printf("read until: %lu\n",img->fd_size);
 
   return 0;
 }
 
 //create output file, mmap, memcpy from input, modifications will be written at close
-int write_file(char output[]){
+int write_file(image *img){
   //open the file
-  fd_w = open(output, O_RDWR|O_CREAT|O_TRUNC, 00660);
+  fd_w = open(img->output, O_RDWR|O_CREAT|O_TRUNC, 00660);
   if (fd_w == -1){
     close(fd_w);
     return 1;
   }
 
   //truncate the new file with the size of input
-  int fd_w_trunc = truncate(output,fd_size);
+  int fd_w_trunc = truncate(img->output,img->fd_size);
   if (fd_w_trunc != 0){
     close(fd_w);
     return 1;
   }
 
   //mmap
-  fd_data_w = mmap(NULL, fd_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd_w, 0);
-  if (fd_data_w == MAP_FAILED){
+  img->fd_data_w = mmap(NULL, img->fd_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd_w, 0);
+  if (img->fd_data_w == MAP_FAILED){
     close(fd_w);
     return 1;
   }
   
   //copy input to output
-  memcpy(fd_data_w, fd_data, fd_size);
+  memcpy(img->fd_data_w, img->fd_data, img->fd_size);
 
   return 0;
 }
@@ -211,28 +204,33 @@ int filter(){
 
 //main function
 int main(int argc, char *argv[]){
+  //set up struct to hold data for our image, pointer to pass to functions
+  image img = {.output = "output.bmp"};
+  image *p_img;
+  p_img = &img;
+
   //parse all arguments
-  if (parse_args(argc, argv)){
+  if (parse_args(p_img, argc, argv)){
     exit(0);
   }
   
   //ensure we have an input file
-  if (strcmp(input,"") == 0){
+  if (strcmp(img.input,"") == 0){
     error(BMP_ERROR);
   }
 
   //try to mmap the file
-  if (open_file(input)){
+  if (open_file(p_img)){
     error("Problem loading file.");
   }
 
   //print the details of the file
-  if (get_details()){
+  if (get_details(p_img)){
     error("Problem looking up the details of the file.");
   }
 
   //try to mmap the output file
-  if (write_file(output)){
+  if (write_file(p_img)){
     error("Problem writing to output file.");
   }
 
@@ -244,14 +242,17 @@ int main(int argc, char *argv[]){
   //testing - do more stuff
   printf("\n\nWe're doing stuff..\n\n");
 
+  //testing - print the struct values
+  printf("input: %s\noutput: %s\nfd_size: %lu\nmagic_number: %s\nwidth: %d\nheight: %d\nbits: %d\nfile_size: %d\noffset: %d\ndata_size: %d\n\n",img.input,img.output,img.fd_size,img.magic_number,img.width,img.height,img.bits,img.file_size,img.offset,img.data_size);
+
   //no need to unmap memory as the process is about to terminate anyway
-  int fd_munmap = munmap(fd_data,fd_size);
+  int fd_munmap = munmap(img.fd_data,img.fd_size);
   if (fd_munmap == -1){
     error("Could not unmap file in memory.");
   }
 
   //probably should unmap the output file as we want to close the fd
-  int fd_w_munmap = munmap(fd_data_w,fd_size);
+  int fd_w_munmap = munmap(img.fd_data_w,img.fd_size);
   if (fd_w_munmap == -1){
     error("Could not unmap output file in memory.");
   }
