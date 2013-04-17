@@ -27,8 +27,8 @@
 /*prototypes*/
 
 /*variables*/
-char input[100]; //storing the input from args[]
-char output[100] = "out.bmp"; //default to this name for output bmp
+char input[256]; //storing the input from args[]
+char output[256] = "out.bmp"; //default to this name for output bmp
 float threshold; //storing the threshold for filter
 unsigned long fd_size; //storing size of file
 unsigned char *fd_data; //for reading
@@ -77,7 +77,7 @@ int parse_args(int argc, char *argv[]){
       usage();
       return 1;
     }else if (strcmp(argv[i],"-o") == 0){
-      strcpy(output, argv[i+1]);
+      strncpy(output, argv[i+1], 256);
       //testing
       printf("TESTING: output is: %s\n", output);
       i++;
@@ -89,7 +89,7 @@ int parse_args(int argc, char *argv[]){
       threshold = atof(argv[i+1]);
       i++;
     }else{
-      strcpy(input, argv[argc-1]);
+      strncpy(input, argv[argc-1], 256);
       //testing
       printf("TESTING: input is: %s\n", input);
     }
