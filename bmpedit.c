@@ -134,31 +134,37 @@ int open_file(image *img){
   return 0;
 }
 
-//print file details
+//get file details
 int get_details(image *img){
   //if file is bmp, each int is 4 bytes, width offset 12h, height offset 16h
   //we need to reverse the bits as it's little endian
 
 //  int width, height, bits, file_size, offset, data_size;
   img->width = img->fd_data[0x12] | img->fd_data[0x13] << 8 | img->fd_data[0x14] << 16 | img->fd_data[0x15] << 24;
-  printf("Image width: %dpx\n",img->width);
-
   img->height = img->fd_data[0x16] | img->fd_data[0x17] << 8 | img->fd_data[0x18] << 16 | img->fd_data[0x19] << 24;
+  img->bits = img->fd_data[0x1C] | img->fd_data[0x1D] << 8;
+  img->file_size = img->fd_data[0x02] | img->fd_data[0x03] << 8 | img->fd_data[0x04] << 16 | img->fd_data[0x05] << 24;
+  img->offset = img->fd_data[0x0A] | img->fd_data[0x0B] << 8 | img->fd_data[0x0C] << 16 | img->fd_data[0x0D] << 24;
+  img->data_size = img->fd_data[0x22] | img->fd_data[0x23] << 8 | img->fd_data[0x24] << 16 | img->fd_data[0x25] << 24;
+  img->compression = img->fd_data[0x1E] | img->fd_data[0x1F] << 8 | img->fd_data[0x20] << 16 | img->fd_data[0x21] << 24;
+
+  printf("Image width: %dpx\n",img->width);
   printf("Image height: %dpx\n",img->height);
-  
-  img->bits =  img->fd_data[0x1C] | img->fd_data[0x1D] << 8;
   printf("Image bpp: %d\n",img->bits);
-
-  img->file_size =  img->fd_data[0x02] | img->fd_data[0x03] << 8 | img->fd_data[0x04] << 16 | img->fd_data[0x05] << 24;
   printf("bmpheader.filesize: %d\n",img->file_size);
-
-  img->offset =  img->fd_data[0x0A] | img->fd_data[0x0B] << 8 | img->fd_data[0x0C] << 16 | img->fd_data[0x0D] << 24;
   printf("bmpheader.offset: %d\n",img->offset);
-
-  img->data_size =  img->fd_data[0x22] | img->fd_data[0x23] << 8 | img->fd_data[0x24] << 16 | img->fd_data[0x25] << 24;
   printf("dibheader.datasize: %d\n",img->data_size);
-
   printf("read until: %lu\n",img->fd_size);
+  printf("compression type: %d\n",img->compression);
+
+  //24bit is BGR each 8 bits in value, starting bottom left, going horizontally
+  printf("\n\n#####\nthe value of the 1st pixel is: %d %d %d\n", img->fd_data[img->offset+0],img->fd_data[img->offset+1],img->fd_data[img->offset+2]);
+  printf("\n\n#####\nthe value of the 2nd pixel is: %d %d %d\n", img->fd_data[img->offset+3],img->fd_data[img->offset+4],img->fd_data[img->offset+5]);
+  printf("\n\n#####\nthe value of the 3rd pixel is: %d %d %d\n", img->fd_data[img->offset+6],img->fd_data[img->offset+7],img->fd_data[img->offset+8]);
+  printf("\n\n#####\nthe value of the 4th pixel is: %d %d %d\n", img->fd_data[img->offset+9],img->fd_data[img->offset+10],img->fd_data[img->offset+11]);
+  printf("\n\n#####\nthe value of the 5th pixel is: %d %d %d\n", img->fd_data[img->offset+12],img->fd_data[img->offset+13],img->fd_data[img->offset+14]);
+  printf("\n\n#####\nthe value of the 6th pixel is: %d %d %d\n", img->fd_data[img->offset+15],img->fd_data[img->offset+16],img->fd_data[img->offset+17]);
+
 
   return 0;
 }
@@ -193,12 +199,34 @@ int write_file(image *img){
 }
 
 //run the filter process on the file
-int filter(){
+int filter(image *img){
 
-  //reminder:
-  //might need a struct to hold info for the file, cause I need to access things like res for filter..
+  //brightness with sliding scale 0.0 = darkest, 1.0 = brightest, 0.5 = normal
+  /*
+  brightness of 0.0 would be 100% darker
+  brightness of 0.25 would be 50% darker
+  brightness of 0.5 would be 0% brighter
+  brightness of 0.75 would be 50% brighter
+  brightness of 1.0 would be 100% brighter
+  */
+  
+  int brightness,scaling_factor;
 
-  printf("TESTING: you're in the filter function: %f\n\n",threshold);
+  scaling_factor = ((int)(threshold*100)-50) * 2;
+  brightness = 255 * scaling_factor / 100;
+
+  int j;
+  for (j=0;j<((480*640)*3);j++){
+    int new_value = img->fd_data_w[(img->offset+j)]+brightness;
+    if (new_value >= 255){
+      img->fd_data_w[(img->offset+j)] = 255;
+    }else if (new_value < 0){
+      img->fd_data_w[(img->offset+j)] = 0;
+    }else{
+      img->fd_data_w[(img->offset+j)] = new_value;
+    }
+  }
+
   return 0;
 }
 
@@ -229,21 +257,23 @@ int main(int argc, char *argv[]){
     error("Problem looking up the details of the file.");
   }
 
+  //exit if we have a compressed bmp (zero is uncompressed)
+  if (img.compression){
+    error("Sorry, cannot handle compressed images.");
+  }
+
   //try to mmap the output file
   if (write_file(p_img)){
     error("Problem writing to output file.");
   }
 
   //run filter
-  filter();
+  filter(p_img);
 
   //run other
 
   //testing - do more stuff
   printf("\n\nWe're doing stuff..\n\n");
-
-  //testing - print the struct values
-  printf("input: %s\noutput: %s\nfd_size: %lu\nmagic_number: %s\nwidth: %d\nheight: %d\nbits: %d\nfile_size: %d\noffset: %d\ndata_size: %d\n\n",img.input,img.output,img.fd_size,img.magic_number,img.width,img.height,img.bits,img.file_size,img.offset,img.data_size);
 
   //no need to unmap memory as the process is about to terminate anyway
   int fd_munmap = munmap(img.fd_data,img.fd_size);
