@@ -29,6 +29,7 @@
 
 /*variables*/
 float threshold; //storing the threshold for filter
+float threshold_brightness; //storing the brightness for filter
 int fd_w; //output file descriptor
 
 /*constants*/
@@ -41,7 +42,8 @@ int fd_w; //output file descriptor
 
 #define OPTIONS_STR "\
   -o [FILE]         Sets the output file (defaults to \"out.bmp\").\n\
-  -t [0.0-1.0]      Applies this (rounded) value to threshold filter.\n\
+  -t [0.0-1.0]      Applies this value to threshold filter (conflicts -b).\n\
+  -b [0.0-1.0]      Applies this value to brightness filter (conflicts -t).\n\
   -h                Displays this usage message."
 
 #define BMP_ERROR "\
@@ -63,7 +65,6 @@ void error(char msg[]) {
 
 //parse arguments
 int parse_args(image *img, int argc, char *argv[]){
-  printf("argc: %d\n\n",argc);
   if (argc < 2){
     error(BMP_ERROR);
     return 1;
@@ -75,21 +76,37 @@ int parse_args(image *img, int argc, char *argv[]){
       return 1;
     }else if (strcmp(argv[i],"-o") == 0){
       strncpy(img->output, argv[i+1], 256);
-      //testing
-      printf("TESTING: output is: %s\n", img->output);
       i++;
     }else if (strcmp(argv[i],"-t") == 0){
       if (atof(argv[i+1]) < 0 || atof(argv[i+1]) > 1.0 ){
         error("Threshold must be between 0.0 and 1.0");
         exit(1);
       }
+      if (threshold_brightness){
+        error("Threshold conflicts with brightness.");
+        exit(1);       
+      }
       threshold = atof(argv[i+1]);
       i++;
+    }else if (strcmp(argv[i],"-b") == 0){
+      if (atof(argv[i+1]) < 0 || atof(argv[i+1]) > 1.0 ){
+        error("Brightness must be between 0.0 and 1.0");
+        exit(1);
+      }
+      if (threshold){
+        error("Brightness conflicts with threshold.");
+        exit(1);       
+      }
+      threshold_brightness = atof(argv[i+1]);
+      i++;
     }else{
-      strncpy(img->input, argv[argc-1], 256);
-      //testing
-      printf("TESTING: input is: %s\n", img->input);
+      strncpy(img->input, argv[i], 256);
     }
+  }
+
+  //ensure we have an input file
+  if (strcmp(img->input,"") == 0){
+    error(BMP_ERROR);
   }
 
   return 0;
@@ -139,7 +156,6 @@ int get_details(image *img){
   //if file is bmp, each int is 4 bytes, width offset 12h, height offset 16h
   //we need to reverse the bits as it's little endian
 
-//  int width, height, bits, file_size, offset, data_size;
   img->width = img->fd_data[0x12] | img->fd_data[0x13] << 8 | img->fd_data[0x14] << 16 | img->fd_data[0x15] << 24;
   img->height = img->fd_data[0x16] | img->fd_data[0x17] << 8 | img->fd_data[0x18] << 16 | img->fd_data[0x19] << 24;
   img->bits = img->fd_data[0x1C] | img->fd_data[0x1D] << 8;
@@ -157,14 +173,13 @@ int get_details(image *img){
   printf("read until: %lu\n",img->fd_size);
   printf("compression type: %d\n",img->compression);
 
-  //24bit is BGR each 8 bits in value, starting bottom left, going horizontally
+  //24bit is BGR each 8 bits in value, starting bottom left to right
   printf("\n\n#####\nthe value of the 1st pixel is: %d %d %d\n", img->fd_data[img->offset+0],img->fd_data[img->offset+1],img->fd_data[img->offset+2]);
   printf("\n\n#####\nthe value of the 2nd pixel is: %d %d %d\n", img->fd_data[img->offset+3],img->fd_data[img->offset+4],img->fd_data[img->offset+5]);
   printf("\n\n#####\nthe value of the 3rd pixel is: %d %d %d\n", img->fd_data[img->offset+6],img->fd_data[img->offset+7],img->fd_data[img->offset+8]);
   printf("\n\n#####\nthe value of the 4th pixel is: %d %d %d\n", img->fd_data[img->offset+9],img->fd_data[img->offset+10],img->fd_data[img->offset+11]);
   printf("\n\n#####\nthe value of the 5th pixel is: %d %d %d\n", img->fd_data[img->offset+12],img->fd_data[img->offset+13],img->fd_data[img->offset+14]);
   printf("\n\n#####\nthe value of the 6th pixel is: %d %d %d\n", img->fd_data[img->offset+15],img->fd_data[img->offset+16],img->fd_data[img->offset+17]);
-
 
   return 0;
 }
@@ -201,6 +216,42 @@ int write_file(image *img){
 //run the filter process on the file
 int filter(image *img){
 
+  /*
+  filter each pixel to be white if the average of the pixels colour is over the threshold, else black
+  lower filter value should give us more white:
+   "all colours which are brighter than a specific number will become white"
+  so if factor of 0.5, then anything brighter than 50% of 255 would become white
+  if factor of 0.75, then anything brighter than 75% of 255 would become white
+  */
+
+  int scale,value;
+  scale = (int)(255*threshold); //lower threshold gives us more white
+//  scale = 255-(int)(255*threshold); //the (255-x) is what flips the value to make lower threshold give more black
+
+  //get average for each pixel in file
+  int i,j;
+  for (i=0;i<((480*640)*3);i++){
+    int average = (img->fd_data_w[(img->offset+i)] + img->fd_data_w[(img->offset+(i+1))] + img->fd_data_w[(img->offset+(i+2))]) / 3;
+    //work out if we're writing white or black
+    if (average <= scale){
+      value = 0;
+    }else{
+      value = 255;
+    }
+    //write the new pixel colours
+    for (j=0;j<3;j++){
+      img->fd_data_w[(img->offset+(i+j))] = value;
+    }
+    //jump ahead to next pixel
+    i=i+2;
+  }
+
+  return 0;
+}
+
+//run the brightness filter on the file
+int filter_brightness(image *img){
+
   //brightness with sliding scale 0.0 = darkest, 1.0 = brightest, 0.5 = normal
   /*
   brightness of 0.0 would be 100% darker
@@ -211,19 +262,18 @@ int filter(image *img){
   */
   
   int brightness,scaling_factor;
-
-  scaling_factor = ((int)(threshold*100)-50) * 2;
+  scaling_factor = ((int)(threshold_brightness*100)-50) * 2;
   brightness = 255 * scaling_factor / 100;
 
-  int j;
-  for (j=0;j<((480*640)*3);j++){
-    int new_value = img->fd_data_w[(img->offset+j)]+brightness;
+  int i;
+  for (i=0;i<((480*640)*3);i++){
+    int new_value = img->fd_data_w[(img->offset+i)]+brightness;
     if (new_value >= 255){
-      img->fd_data_w[(img->offset+j)] = 255;
+      img->fd_data_w[(img->offset+i)] = 255;
     }else if (new_value < 0){
-      img->fd_data_w[(img->offset+j)] = 0;
+      img->fd_data_w[(img->offset+i)] = 0;
     }else{
-      img->fd_data_w[(img->offset+j)] = new_value;
+      img->fd_data_w[(img->offset+i)] = new_value;
     }
   }
 
@@ -242,11 +292,6 @@ int main(int argc, char *argv[]){
     exit(0);
   }
   
-  //ensure we have an input file
-  if (strcmp(img.input,"") == 0){
-    error(BMP_ERROR);
-  }
-
   //try to mmap the file
   if (open_file(p_img)){
     error("Problem loading file.");
@@ -268,7 +313,11 @@ int main(int argc, char *argv[]){
   }
 
   //run filter
-  filter(p_img);
+  if (threshold){
+    filter(p_img);
+  }else if(threshold_brightness){
+    filter_brightness(p_img);
+  }
 
   //run other
 
