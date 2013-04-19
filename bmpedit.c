@@ -156,6 +156,8 @@ int get_details(image *img){
   //if file is bmp, each int is 4 bytes, width offset 12h, height offset 16h
   //we need to reverse the bits as it's little endian
 
+  char compression[50];
+
   img->width = img->fd_data[0x12] | img->fd_data[0x13] << 8 | img->fd_data[0x14] << 16 | img->fd_data[0x15] << 24;
   img->height = img->fd_data[0x16] | img->fd_data[0x17] << 8 | img->fd_data[0x18] << 16 | img->fd_data[0x19] << 24;
   img->bits = img->fd_data[0x1C] | img->fd_data[0x1D] << 8;
@@ -171,15 +173,26 @@ int get_details(image *img){
   printf("bmpheader.offset: %d\n",img->offset);
   printf("dibheader.datasize: %d\n",img->data_size);
   printf("read until: %lu\n",img->fd_size);
-  printf("compression type: %d\n",img->compression);
 
-  //24bit is BGR each 8 bits in value, starting bottom left to right
-  printf("\n\n#####\nthe value of the 1st pixel is: %d %d %d\n", img->fd_data[img->offset+0],img->fd_data[img->offset+1],img->fd_data[img->offset+2]);
-  printf("\n\n#####\nthe value of the 2nd pixel is: %d %d %d\n", img->fd_data[img->offset+3],img->fd_data[img->offset+4],img->fd_data[img->offset+5]);
-  printf("\n\n#####\nthe value of the 3rd pixel is: %d %d %d\n", img->fd_data[img->offset+6],img->fd_data[img->offset+7],img->fd_data[img->offset+8]);
-  printf("\n\n#####\nthe value of the 4th pixel is: %d %d %d\n", img->fd_data[img->offset+9],img->fd_data[img->offset+10],img->fd_data[img->offset+11]);
-  printf("\n\n#####\nthe value of the 5th pixel is: %d %d %d\n", img->fd_data[img->offset+12],img->fd_data[img->offset+13],img->fd_data[img->offset+14]);
-  printf("\n\n#####\nthe value of the 6th pixel is: %d %d %d\n", img->fd_data[img->offset+15],img->fd_data[img->offset+16],img->fd_data[img->offset+17]);
+  if (img->compression == 0){
+    strncpy(compression,"None",50);
+  }else if (img->compression == 1){
+    strncpy(compression,"RLE 8-bit/pixel",50);
+  }else if (img->compression == 2){
+    strncpy(compression,"RLE 4-bit/pixel",50);
+  }else if (img->compression == 3){
+    strncpy(compression,"Bit field or Huffman 1D compression",50);
+  }else if (img->compression == 4){
+    strncpy(compression,"JPEG or RLE-24 compression",50); //Only for printing, so prob won't see it
+  }else if (img->compression == 5){
+    strncpy(compression,"PNG",50); //Only for printing, so prob won't see it
+  }else if (img->compression == 6){
+    strncpy(compression,"Bit field",50);
+  }else{
+    strncpy(compression,"Unknown",50);
+  }
+
+  printf("compression type: %s\n",compression);
 
   return 0;
 }
@@ -318,11 +331,6 @@ int main(int argc, char *argv[]){
   }else if(threshold_brightness){
     filter_brightness(p_img);
   }
-
-  //run other
-
-  //testing - do more stuff
-  printf("\n\nWe're doing stuff..\n\n");
 
   //no need to unmap memory as the process is about to terminate anyway
   int fd_munmap = munmap(img.fd_data,img.fd_size);
